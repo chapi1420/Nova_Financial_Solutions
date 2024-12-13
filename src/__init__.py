@@ -1,64 +1,108 @@
 import pandas as pd
-import numpy as np
 import matplotlib as plt
-#import pynance as py
-import seaborn as sns
-#rom vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
+import os
 
-df = pd.read_csv("C:\\Users\\nadew\\10x\\week1\\Nova_Financial_Solutions\\data_used\\raw\\raw_analyst_ratings.csv")
-print(df.head(10))
-# ###headline lenght
-# df['head_lenght']=df['headline'].apply(len)
-# print(df['head_lenght'])
-# headline_status=df['head_lenght'].describe()
-# print(headline_status)
+# Function to load and prepare stock data
+def load_data(filepath):
+    """Load stock price data from a CSV file."""
+    if not os.path.exists(filepath):
+        raise FileNotFoundError(f"File not found: {filepath}")
 
-# ###article_per_publisher
-# publisher_counts=df['publisher'].value_counts()
-# top_publishers=publisher_counts.head(10)
-# print(top_publishers)
+    data = pd.read_csv(filepath)
+    # Ensure necessary columns are present
+    required_columns = ['Open', 'High', 'Low', 'Close', 'Volume']
+    for col in required_columns:
+        if col not in data.columns:
+            raise ValueError(f"Missing required column: {col}")
 
+    return data
 
+# Function to calculate simple moving average (SMA)
+def calculate_sma(data, period):
+    """Calculate Simple Moving Average (SMA)."""
+    data[f'SMA_{period}'] = data['Close'].rolling(window=period).mean()
+    return data
 
+# Function to calculate relative strength index (RSI)
+def calculate_rsi(data, period):
+    """Calculate Relative Strength Index (RSI)."""
+    delta = data['Close'].diff(1)
+    gain = delta.where(delta > 0, 0)
+    loss = -delta.where(delta < 0, 0)
 
-############ time analysis#############################################
+    avg_gain = gain.rolling(window=period, min_periods=1).mean()
+    avg_loss = loss.rolling(window=period, min_periods=1).mean()
 
+    rs = avg_gain / avg_loss
+    data[f'RSI_{period}'] = 100 - (100 / (1 + rs))
+    return data
 
-#df['date']=pd.to_datetime(df['date'],format='mixed', errors='coerce',utc=True)
-#print(df['date'])
-######EXRACTING COMPONENTS FOR ANALYSIS BY WEAK, MONTH AND YEAR
+# Function to calculate MACD
+def calculate_macd(data):
+    """Calculate Moving Average Convergence Divergence (MACD)."""
+    short_ema = data['Close'].ewm(span=12, adjust=False).mean()
+    long_ema = data['Close'].ewm(span=26, adjust=False).mean()
+    data['MACD'] = short_ema - long_ema
+    data['MACD_signal'] = data['MACD'].ewm(span=9, adjust=False).mean()
+    return data
 
-#df['day_of_weak']=df['date'].dt.day_name()
-#df['month']=df['date'].dt.month
-#df['year']=df['date'].dt.year
+# Function to visualize stock price and indicators
+def visualize_data(data):
+    """Create visualizations for stock prices and indicators."""
+    plt.figure(figsize=(14, 10))
 
-#articles publishe by days of the weak, month,
-#day_counts=df['day_of_weak'].value_counts()
-#month_counts=df['month'].value_counts()
-#year_counts=df['year'].value_counts()
+    # Plot Close Price and SMA
+    plt.subplot(3, 1, 1)
+    plt.plot(data['Close'], label='Close Price', color='blue')
+    if 'SMA_20' in data:
+        plt.plot(data['SMA_20'], label='SMA (20)', color='orange')
+    plt.title('Stock Price with Simple Moving Average')
+    plt.legend()
 
-# articles published by days of the weak
+    # Plot RSI
+    plt.subplot(3, 1, 2)
+    if 'RSI_14' in data:
+        plt.plot(data['RSI_14'], label='RSI (14)', color='green')
+        plt.axhline(y=70, color='red', linestyle='--', label='Overbought')
+        plt.axhline(y=30, color='blue', linestyle='--', label='Oversold')
+        plt.title('Relative Strength Index (RSI)')
+        plt.legend()
 
-# plt.figure(figsize=(10, 6))
-# sns.countplot(data=df, x=df['day_of_weak'], order=['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'])
-# plt.title('Articles Published by Day of the Week')
-# plt.xlabel('Day of the Week')
-# plt.ylabel('Number of Articles')
-# plt.show()
-# ##################ARTICLES PUBLISHED BY MONTS OF THE YEAR ###################################
-# #plt.figure(figsize=(10, 6))
-# #sns.countplot(data=df, x=df['month'])
-#plt.title('Number of Articles Published by Month')
-#plt.xlabel('Month')
-#plt.ylabel('Number of Articles')
-#plt.show()
-#######################################ARTICLES DISTIRBUTION BY YEAR############################################
-#def articles_By_years():
-  #plt.figure(figsize=(10, 6))
-  #sns.countplot(data=df, x=df['year'])
-  #plt.title('Number of Articles Published by year')
-  #plt.xlabel('years')
-  #plt.ylabel('Number of Articles')
-  #plt.show()
+    # Plot MACD
+    plt.subplot(3, 1, 3)
+    if 'MACD' in data and 'MACD_signal' in data:
+        plt.plot(data['MACD'], label='MACD', color='purple')
+        plt.plot(data['MACD_signal'], label='MACD Signal', color='orange')
+        plt.title('MACD and Signal Line')
+        plt.legend()
 
-#articles_By_years()
+    plt.tight_layout()
+    plt.show()
+
+# Main execution block
+def main():
+    """Main function to execute Task 2 steps."""
+  
+    try:
+        # Load data
+        filepath = "./data/raw_analyst_ratings.csv/raw_analyst_ratings.csv"  # Replace with your dataset path
+        stock_data = load_data(filepath)
+
+        # Calculate indicators
+        stock_data = calculate_sma(stock_data, period=20)
+        stock_data = calculate_rsi(stock_data, period=14)
+        stock_data = calculate_macd(stock_data)
+
+        # Save enriched data to a new file
+        enriched_filepath = 'enriched_stock_data.csv'
+        stock_data.to_csv(enriched_filepath, index=False)
+        print(f"Enriched data saved to: {enriched_filepath}")
+
+        # Visualize data
+        visualize_data(stock_data)
+
+    except Exception as e:
+        print(f"Error: {e}")
+
+if __name__ == '__main__':
+    main()
