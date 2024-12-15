@@ -3,19 +3,13 @@ import pandas as pd
 from io import StringIO
 
 # Mock dataset for testing
-MOCK_DATA = """headline,publisher,date
-Stock hits record high,Publisher A,2024-12-10
-Earnings report shows growth,Publisher B,2024-12-10
-CEO steps down,Publisher A,2024-12-11
-Company files for bankruptcy,Publisher C,2024-12-11
-New product launch excites investors,Publisher A,2024-12-12
-"""
-
+DATA = '''data to be checked
+'''
 class TestEDAFunctions(unittest.TestCase):
 
     def setUp(self):
         """Set up a mock DataFrame for testing."""
-        self.data = pd.read_csv(StringIO(MOCK_DATA))
+        self.data = pd.read_csv(StringIO(DATA))
 
     def test_load_data(self):
         """Test if the data loads correctly."""
