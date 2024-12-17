@@ -7,3 +7,5 @@ data_file
  enriched_stock_data.csv
 
 enriched_stock_data.csv
+ notebooks/headline_length_stats.csv
+        notebooks/publisher_counts.csv
