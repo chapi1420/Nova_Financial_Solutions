@@ -24,9 +24,10 @@ print("Top 5 Publishers by Number of Articles:")
 print(publisher_counts.head())
 
 # Analyze publication dates
-news_df['date'] = pd.to_datetime(news_df['date'], format="%Y-%m-%d %H:%M:%S", errors='coerce')
-daily_articles = news_df['date'].dt.date.value_counts().sort_index()
-
+def date_conv(news_df):
+    news_df['date'] = pd.to_datetime(news_df['date'], format="%Y-%m-%d %H:%M:%S", errors='coerce')
+    return news_df['date'].dt.date.value_counts().sort_index()
+daily_articles = date_conv(news_df)
 # Plot: Articles over time
 plt.figure(figsize=(10, 6))
 plt.plot(daily_articles.index, daily_articles.values, color='blue')
