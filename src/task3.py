@@ -1,74 +1,187 @@
 import pandas as pd
+import yfinance as yf
 import numpy as np
+import talib
 from textblob import TextBlob
+from datetime import datetime, timedelta
+import seaborn as sns
 import matplotlib.pyplot as plt
-from scipy.stats import pearsonr
-from task1 import date_conv
+from scipy import stats
 
-# Load datasets
-news_df = pd.read_csv("C:\\Users\\nadew\\10x\\week1\\Nova_Financial_Solutions\\data_file\\raw_analyst_ratings.csv\\raw_analyst_ratings.csv")  # Columns: ['headline', 'date', 'stock']
-stock_df = pd.read_csv("C:\\Users\\nadew\\10x\\week1\\Nova_Financial_Solutions\\data_file\\yfinance_data\\yfinance_data\\AAPL_historical_data.csv")  # Columns: ['date', 'stock', 'close']
-news_df.columns = news_df.columns.str.strip().str.lower()
-print(news_df.head())
-# Convert 'date' columns to datetime
-news_df['date'] = pd.to_datetime(news_df['date'], format="%Y-%m-%d %H:%M:%S", errors='coerce')
-# Step 1: Perform Sentiment Analysis on Headlines
-def get_sentiment(text):
-    """Calculates sentiment polarity (-1 to 1) using TextBlob."""
-    return TextBlob(text).sentiment.polarity
+class FinancialAnalysis:
+    def __init__(self, news_data_path):
+        """
+        Initialize with news data path
+        """
+        self.news_df = pd.read_csv(news_data_path)
+        self.news_df['date'] = pd.to_datetime(self.news_df['date'], format="%Y-%m-%d %H:%M:%S", errors='coerce')
+        self.stocks_data = {}
+        self.technical_indicators = {}
+        
+    def get_sentiment_score(self, text):
+        """
+        Calculate sentiment score using TextBlob
+        """
+        return TextBlob(str(text)).sentiment.polarity
+    
+    def analyze_news_sentiment(self):
+        """
+        Perform sentiment analysis on news headlines
+        """
+        self.news_df['sentiment_score'] = self.news_df['headline'].apply(self.get_sentiment_score)
+        
+        # Aggregate sentiments by date and stock
+        self.daily_sentiment = self.news_df.groupby(['date', 'stock'])['sentiment_score'].mean().reset_index()
+        return self.daily_sentiment
+    
+    def get_stock_data(self, symbols):
+        """
+        Fetch stock data using yfinance
+        """
+        end_date = datetime.now()
+        start_date = self.news_df['date'].min()
+        
+        for symbol in symbols:
+            stock_data = yf.download(symbol, start=start_date, end=end_date)
+            self.stocks_data[symbol] = stock_data
+            
+            # Calculate daily returns
+            self.stocks_data[symbol]['returns'] = stock_data['Close'].pct_change()
+            
+            # Calculate technical indicators
+            self.technical_indicators[symbol] = self.calculate_technical_indicators(stock_data)
+    
+    def calculate_technical_indicators(self, stock_data):
+        """
+        Calculate technical indicators for a stock
+        """
+        indicators = pd.DataFrame()
+        
+        # Moving averages
+        indicators['MA20'] = talib.SMA(stock_data['Close'], timeperiod=20)
+        indicators['MA50'] = talib.SMA(stock_data['Close'], timeperiod=50)
+        
+        # RSI
+        indicators['RSI'] = talib.RSI(stock_data['Close'], timeperiod=14)
+        
+        # MACD
+        macd, signal, hist = talib.MACD(stock_data['Close'])
+        indicators['MACD'] = macd
+        indicators['MACD_Signal'] = signal
+        
+        return indicators
+    
+    def calculate_correlations(self):
+        """
+        Calculate correlations between sentiment and stock returns
+        """
+        correlation_results = {}
+        
+        for symbol in self.stocks_data.keys():
+            # Get stock specific sentiment
+            stock_sentiment = self.daily_sentiment[self.daily_sentiment['stock'] == symbol]
+            
+            # Get stock returns
+            stock_returns = self.stocks_data[symbol]['returns']
+            
+            # Align dates
+            merged_data = pd.merge(
+                stock_sentiment,
+                stock_returns.reset_index(),
+                left_on='date',
+                right_on='Date',
+                how='inner'
+            )
+            
+            # Calculate correlation
+            correlation, p_value = stats.pearsonr(
+                merged_data['sentiment_score'],
+                merged_data['returns'].fillna(0)
+            )
+            
+            correlation_results[symbol] = {
+                'correlation': correlation,
+                'p_value': p_value
+            }
+            
+        return correlation_results
+    
+    def calculate_technical_correlations(self):
+        """
+        Calculate correlations between technical indicators across stocks
+        """
+        # Prepare DataFrames for each indicator
+        ma20_data = pd.DataFrame()
+        ma50_data = pd.DataFrame()
+        rsi_data = pd.DataFrame()
+        
+        for symbol in self.technical_indicators.keys():
+            ma20_data[symbol] = self.technical_indicators[symbol]['MA20']
+            ma50_data[symbol] = self.technical_indicators[symbol]['MA50']
+            rsi_data[symbol] = self.technical_indicators[symbol]['RSI']
+        
+        correlations = {
+            'MA20': ma20_data.corr(),
+            'MA50': ma50_data.corr(),
+            'RSI': rsi_data.corr()
+        }
+        
+        return correlations
+    
+    def plot_correlations(self, correlations, title):
+        """
+        Create heatmap of correlations
+        """
+        plt.figure(figsize=(10, 8))
+        sns.heatmap(correlations, annot=True, cmap='coolwarm', center=0)
+        plt.title(title)
+        plt.tight_layout()
+        plt.show()
+    
+    def generate_report(self):
+        """
+        Generate analysis report
+        """
+        report = {
+            'sentiment_stats': self.news_df['sentiment_score'].describe(),
+            'daily_sentiment_avg': self.daily_sentiment.groupby('stock')['sentiment_score'].mean(),
+            'correlations': self.calculate_correlations(),
+            'technical_correlations': self.calculate_technical_correlations()
+        }
+        return report
 
-# Check and clean column names
-print("Original Columns:", news_df.columns)
-news_df.columns = news_df.columns.str.strip().str.lower()
+def main():
+    # Initialize analysis
+    analysis = FinancialAnalysis('C:\\Users\\nadew\\10x\\week1\\Nova_Financial_Solutions\\data_file\\raw_analyst_ratings.csv\\raw_analyst_ratings.csv')
+    
+    # Analyze news sentiment
+    analysis.analyze_news_sentiment()
+    
+    # Get stock data
+    symbols = ['AAPL', 'GOOGL', 'MSFT', 'AMZN', 'META', 'TSLA', 'NVDA']
+    analysis.get_stock_data(symbols)
+    
+    # Calculate correlations
+    sentiment_correlations = analysis.calculate_correlations()
+    technical_correlations = analysis.calculate_technical_correlations()
+    
+    # Generate report
+    report = analysis.generate_report()
+    
+    # Plot correlations
+    for indicator, corr_matrix in technical_correlations.items():
+        analysis.plot_correlations(corr_matrix, f'{indicator} Correlations Across Stocks')
+    
+    # Print results
+    print("\nSentiment-Returns Correlations:")
+    for symbol, results in sentiment_correlations.items():
+        print(f"\n{symbol}:")
+        print(f"Correlation: {results['correlation']:.4f}")
+        print(f"P-value: {results['p_value']:.4f}")
+    
+    # Save results
+    pd.DataFrame(sentiment_correlations).to_csv('sentiment_correlations.csv')
+    for indicator, corr_matrix in technical_correlations.items():
+        corr_matrix.to_csv(f'{indicator}_correlations.csv')
 
-# Verify column existence
-if 'headline' in news_df.columns:
-    news_df['sentiment'] = news_df['headline'].apply(get_sentiment)
-else:
-    print("Error: 'headline' column not found in the dataset.")
-    print("Available Columns:", news_df.columns)
-    exit()
-
-
-# Step 2: Aggregate Sentiments by Date and Stock
-average_sentiment = news_df.groupby(['date', 'stock'])['sentiment'].mean().reset_index()
-
-# Step 3: Calculate Daily Stock Returns
-stock_df['daily_return'] = stock_df.groupby('stock')['close'].pct_change()
-
-# Step 4: Merge Sentiment Data with Stock Returns
-merged_df = pd.merge(average_sentiment, stock_df, on=['date', 'stock'])
-
-# Step 5: Correlation Analysis
-def calculate_correlation(df):
-    """Calculates Pearson correlation between sentiment and daily returns."""
-    sentiment = df['sentiment']
-    returns = df['daily_return']
-    correlation, p_value = pearsonr(sentiment.dropna(), returns.dropna())
-    return correlation, p_value
-
-# Group by stock to calculate correlations for each stock
-results = []
-for stock, group in merged_df.groupby('stock'):
-    corr, p_val = calculate_correlation(group)
-    results.append({'stock': stock, 'correlation': corr, 'p_value': p_val})
-
-results_df = pd.DataFrame(results)
-
-# Display correlation results
-print("Correlation Results:")
-print(results_df)
-
-# Step 6: Visualization
-# Plot correlation for each stock
-plt.figure(figsize=(10, 6))
-plt.bar(results_df['stock'], results_df['correlation'], color='blue', alpha=0.7)
-plt.axhline(0, color='red', linestyle='--')
-plt.title('Correlation between Sentiment and Stock Returns by Stock')
-plt.xlabel('Stock')
-plt.ylabel('Correlation Coefficient')
-plt.xticks(rotation=45)
-plt.show()
-
-# Save results
-results_df.to_csv('correlation_results.csv', index=False)
+main()
