@@ -85,7 +85,7 @@ def main():
   
     try:
         # Load data
-        filepath = "./data/raw_analyst_ratings.csv/raw_analyst_ratings.csv"  # Replace with your dataset path
+        filepath = "C:\\Users\\nadew\\10x\\week1\\Nova_Financial_Solutions\\data_file\\yfinance_data\\yfinance_data\\AAPL_historical_data.csv"
         stock_data = load_data(filepath)
 
         # Calculate indicators
