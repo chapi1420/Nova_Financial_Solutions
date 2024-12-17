@@ -4,3 +4,6 @@ notebooks/task1.ipynb
  data/modularization-demo/data/raw_analyist
  data
 data_file
+ enriched_stock_data.csv
+
+enriched_stock_data.csv
